@@ -1,0 +1,4 @@
+﻿Date,Time,Type,Object,Confidence,Image
+2026-11-05,14:37:02,Human,person,0.903,detected_images/detection_20261105_143702_000057.jpg
+2026-11-05,14:37:12,Human,person,0.926,detected_images/detection_20261105_143712_207241.jpg
+2026-11-05,14:37:22,Human,person,0.926,detected_images/detection_20261105_143722_263023.jpg
