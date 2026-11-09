@@ -1,0 +1,21 @@
+# Python virtual environment
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# AI detection images
+detected_images/
+detection_log.csv
+
+# Model files
+*.pt
+
+# Mac files
+.DS_Store
+
+# Secrets
+.env
+
