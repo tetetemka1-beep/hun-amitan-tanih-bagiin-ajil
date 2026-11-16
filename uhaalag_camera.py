@@ -78,8 +78,7 @@ class SmartCameraApp(ctk.CTk):
         self.photo_index = 0
         self.sound_player = SoundPlayer()
         self.visible_notices = set()
-        self.source_var = tk.StringVar(value=str(source))
-        self.confidence_var = tk.DoubleVar(value=DEFAULT_CONFIDENCE)
+        self.source = str(source)
         self.mirror_var = tk.BooleanVar(value=self.store.get_setting("mirror_preview", "0") == "1")
         self.human_notice_var = tk.BooleanVar(value=self.store.get_setting("human_notices", "1") == "1")
         self.animal_alarm_var = tk.BooleanVar(value=self.store.get_setting("animal_alarm", "1") == "1")
@@ -164,25 +163,9 @@ class SmartCameraApp(ctk.CTk):
                       font=("Segoe UI", 12), progress_color=ACCENT, command=self.change_alert_settings).grid(
                           row=8, column=0, sticky="w", padx=10, pady=(14, 8))
         ctk.CTkFrame(side, height=1, fg_color=LINE).grid(row=9, column=0, sticky="ew", padx=10, pady=18)
-        label(side, "КАМЕРЫН ТОХИРГОО", 11, MUTED, True).grid(row=10, column=0, sticky="w", padx=10)
-        label(side, "Камерын индекс / бичлэгийн зам", 11, MUTED).grid(
-            row=11, column=0, sticky="w", padx=10, pady=(12, 2))
-        self.source_entry = ctk.CTkEntry(side, textvariable=self.source_var, fg_color=FIELD,
-                                        border_color=LINE, height=34)
-        self.source_entry.grid(row=12, column=0, sticky="ew", padx=8, pady=4)
-        self.video_button = button(side, "Бичлэг сонгох…", self.choose_video)
-        self.video_button.grid(row=13, column=0, sticky="ew", padx=8, pady=4)
-        self.confidence_label = label(side, f"Илрүүлэлтийн доод босго: {DEFAULT_CONFIDENCE:.0%}", 12)
-        self.confidence_label.grid(row=14, column=0, sticky="w", padx=10, pady=(16, 4))
-        self.confidence_slider = ctk.CTkSlider(side, from_=0.15, to=0.90, number_of_steps=75,
-                                              variable=self.confidence_var, progress_color=ACCENT,
-                                              button_color=ACCENT, command=self.change_confidence)
-        self.confidence_slider.grid(row=15, column=0, sticky="ew", padx=10, pady=6)
-        label(side, "Хувь = AI илрүүлэлтийн итгэлцэл.\nНүүрний төстэй байдлыг\nүр дүнд тусад нь харуулна.",
-              11, MUTED, justify="left").grid(row=16, column=0, sticky="w", padx=10, pady=(4, 14))
         button(side, "Хадгалсан файлууд", self.open_data_folder).grid(
-            row=17, column=0, sticky="ew", padx=8, pady=4)
-        button(side, "Ашиглах заавар", self.show_help).grid(row=18, column=0, sticky="ew", padx=8, pady=(4, 12))
+            row=10, column=0, sticky="ew", padx=8, pady=4)
+        button(side, "Ашиглах заавар", self.show_help).grid(row=11, column=0, sticky="ew", padx=8, pady=(4, 12))
 
     def _build_tabs(self):
         self.tabs = ctk.CTkTabview(self, fg_color=BG, corner_radius=12,
@@ -347,23 +330,16 @@ class SmartCameraApp(ctk.CTk):
         idle = ready and not self.enrollment_active and self.dialog is None
         for widget, enabled in ((self.start_button, not running), (self.stop_button, running and not self.stopping),
                 (self.snapshot_button, ready), (self.human_button, idle), (self.notice_register_button, idle),
-                (self.source_entry, not running), (self.video_button, not running),
                 (self.cancel_button, self.enrollment_active and not self.stopping),
                 (self.edit_button, self.selected_profile is not None and not self.enrollment_active),
                 (self.delete_button, self.selected_profile is not None and not self.enrollment_active),
                 (self.retake_button, self.selected_profile is not None and idle)):
             widget.configure(state="normal" if enabled else "disabled")
 
-    def choose_video(self):
-        path = filedialog.askopenfilename(parent=self, title="Бичлэг сонгох",
-                                         filetypes=[("Видео", "*.mp4 *.avi *.mov *.mkv"), ("Бүх файл", "*.*")])
-        if path:
-            self.source_var.set(path)
-
     def start_camera(self):
         if self.worker is not None and self.worker.is_alive():
             return
-        text = self.source_var.get().strip()
+        text = self.source.strip()
         if text.isdecimal():
             source = int(text)
         elif Path(text).is_file():
@@ -376,7 +352,7 @@ class SmartCameraApp(ctk.CTk):
         self.rendered_image = None
         for kind in tuple(self.visible_notices):
             self.dismiss_notice(kind)
-        self.worker = self.worker_factory(self.store, source, self.confidence_var.get())
+        self.worker = self.worker_factory(self.store, source, DEFAULT_CONFIDENCE)
         self.worker.start()
         self.live_label.configure(text="●  АЧААЛЖ БАЙНА", text_color=BLUE)
         self.status_var.set("AI загваруудыг бэлдэж байна. Анхны удаа интернетээс татна…")
@@ -392,11 +368,6 @@ class SmartCameraApp(ctk.CTk):
         self.worker.stop_event.set()
         self.status_var.set("Камерыг зогсоож байна…")
         self.refresh_buttons()
-
-    def change_confidence(self, value):
-        self.confidence_label.configure(text=f"Илрүүлэлтийн доод босго: {value:.0%}")
-        if self.worker is not None:
-            self.worker.command("confidence", value)
 
     def change_mirror(self):
         try:
