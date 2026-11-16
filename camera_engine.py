@@ -29,7 +29,7 @@ SPECIES = {
 }
 HUMAN_CLASSES = {"person", "man", "woman", "boy", "girl"}
 SPECIES_ALIASES = {"cattle": "cow", "bull": "cow", "brown bear": "bear", "polar bear": "bear"}
-DETECTOR_MODEL = "yolov8s-oiv7.pt"
+DETECTOR_MODEL = "yolov8n-oiv7.pt"
 DEFAULT_CONFIDENCE = 0.35
 
 
@@ -130,7 +130,7 @@ class RecognitionEngine:
         import torch
         from ultralytics import YOLO
 
-        torch.set_num_threads(2)
+        torch.set_num_threads(4)
         self.detector = YOLO(str(MODEL_DIR / DETECTOR_MODEL))
         self.class_species = {i: canonical_species(name) for i, name in self.detector.names.items()}
         self.classes = [i for i, name in self.detector.names.items()
@@ -144,7 +144,7 @@ class RecognitionEngine:
 
     def detect(self, frame, confidence, gallery):
         results = self.detector.predict(frame, conf=confidence, classes=self.classes,
-                                        imgsz=640, max_det=16, verbose=False, device="cpu")
+                                        imgsz=416, max_det=16, verbose=False, device="cpu")
         height, width = frame.shape[:2]
         objects = []
         for box in results[0].boxes:
@@ -329,10 +329,10 @@ class CameraWorker(threading.Thread):
                         break
                     raise OSError("Камерын дүрс тасарлаа. Холболтыг шалгаад дахин эхлүүлнэ үү.")
                 height, width = frame.shape[:2]
-                if max(height, width) > 960:
-                    scale = 960 / max(height, width)
+                if max(height, width) > 640:
+                    scale = 640 / max(height, width)
                     frame = cv2.resize(frame, (int(width * scale), int(height * scale)))
-                objects = engine.detect(frame, self.confidence, self.gallery)
+                objects = engine.detect(frame, self.confidence, self.gallery)                
                 now = time.monotonic()
                 was_enrolling = self.enrollment is not None
                 if self.enrollment:

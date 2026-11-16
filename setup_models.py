@@ -11,9 +11,9 @@ from pathlib import Path
 MODEL_DIR = Path(__file__).resolve().parent / "models"
 # URL, minimum size, SHA-256 (or the publisher's hash prefix).
 MODELS = {
-    "yolov8s-oiv7.pt": (
-        "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8s-oiv7.pt",
-        22_000_000, ""),
+    "yolov8n-oiv7.pt": (
+        "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n-oiv7.pt",
+        5_000_000, ""),
     "face_detection_yunet_2023mar.onnx": (
         "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/"
         "face_detection_yunet/face_detection_yunet_2023mar.onnx", 200_000,

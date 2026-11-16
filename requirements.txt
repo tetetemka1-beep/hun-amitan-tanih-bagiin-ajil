@@ -1,12 +1,7 @@
 customtkinter>=5.2,<7
-<<<<<<< HEAD
 opencv-python>=4.8,<6
-Pillow>=10
+Pillow>=10,<13
 numpy>=1.26
-ultralytics>=8.3
+ultralytics>=8.3,<9
 torch>=2.2
 torchvision>=0.17
-=======
-Pillow>=10,<13
-ultralytics>=8.3,<9
->>>>>>> c9f4295f8b7dd02717c547f63498203a5aa05d82
