@@ -131,6 +131,10 @@ class RecognitionEngine:
         from ultralytics import YOLO
 
         torch.set_num_threads(4)
+        cv2.setNumThreads(2)
+
+        self._face_frame_count = 0
+        self._identity_cache = []
         self.detector = YOLO(str(MODEL_DIR / DETECTOR_MODEL))
         self.class_species = {i: canonical_species(name) for i, name in self.detector.names.items()}
         self.classes = [i for i, name in self.detector.names.items()
@@ -142,9 +146,147 @@ class RecognitionEngine:
         self.face_recognizer = cv2.FaceRecognizerSF_create(
             str(MODEL_DIR / "face_recognition_sface_2021dec.onnx"), "")
 
+    
     def detect(self, frame, confidence, gallery):
-        results = self.detector.predict(frame, conf=confidence, classes=self.classes,
-                                        imgsz=416, max_det=16, verbose=False, device="cpu")
+    # YOLO: кадр бүрд хүн, амьтан илрүүлнэ
+        results = self.detector.predict(
+            frame,
+            conf=confidence,
+            classes=self.classes,
+            imgsz=384,
+            max_det=12,
+            verbose=False,
+            device="cpu"
+        )
+
+        height, width = frame.shape[:2]
+        objects = []
+
+        for box in results[0].boxes:
+            species = self.class_species[int(box.cls[0])]
+            if species is None:
+                continue
+
+            kind = "human" if species == "person" else "animal"
+
+            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+            x1, x2 = max(0, x1), min(width, x2)
+            y1, y2 = max(0, y1), min(height, y2)
+
+            if x2 - x1 < 16 or y2 - y1 < 16:
+                continue
+
+            obj = Detection(
+                kind, species, float(box.conf[0]),
+                (x1, y1, x2, y2),
+                frame[y1:y2, x1:x2].copy()
+            )
+
+            obj.label = (
+                "Бүртгэлгүй хүн"
+                if kind == "human"
+                else SPECIES.get(species, species)
+            )
+            objects.append(obj)
+
+        objects = suppress_duplicates(objects)
+
+        # Нүүр таних ажиллагааг 2 кадр тутамд хийнэ
+        self._face_frame_count += 1
+        check_faces = self._face_frame_count % 2 == 0
+
+        if check_faces:
+            faces = []
+
+            if any(obj.kind == "human" for obj in objects):
+                self.face_detector.setInputSize((width, height))
+                _, detected_faces = self.face_detector.detect(frame)
+
+                if detected_faces is not None:
+                    faces = list(detected_faces)
+
+            new_cache = []
+
+            for obj in objects:
+                if obj.kind != "human":
+                    continue
+
+                x1, y1, x2, y2 = obj.bbox
+
+                inside = [
+                    face for face in faces
+                    if x1 <= face[0] + face[2] / 2 <= x2
+                    and y1 <= face[1] + face[3] / 2 <= y2
+                ]
+
+                if len(inside) == 1:
+                    face = inside[0]
+                    obj.face_size = int(min(face[2:4]))
+
+                    if obj.face_size >= 40:
+                        obj.crop = self.face_recognizer.alignCrop(frame, face)
+                        obj.embedding = normalized(
+                            self.face_recognizer.feature(obj.crop)
+                        )
+
+                if obj.embedding is None:
+                    obj.label = "Хүн · нүүрээ харуулна уу"
+                    continue
+
+                profile, obj.similarity = best_match(
+                    obj.embedding, obj.kind, obj.species, gallery
+                )
+
+                if profile is not None:
+                    obj.profile_id = profile["id"]
+                    obj.label = display_name(profile)
+
+                    new_cache.append((
+                        obj.bbox,
+                        obj.profile_id,
+                        obj.label,
+                        obj.similarity
+                    ))
+
+            self._identity_cache = new_cache
+
+        else:
+            # Завсрын кадрт өмнөх танилтын үр дүнг ашиглана
+            for obj in objects:
+                if obj.kind != "human":
+                    continue
+
+                x1, y1, x2, y2 = obj.bbox
+                best_iou = 0
+                matched = None
+
+                for bbox, profile_id, label, similarity in self._identity_cache:
+                    px1, py1, px2, py2 = bbox
+
+                    intersection = (
+                        max(0, min(x2, px2) - max(x1, px1))
+                        * max(0, min(y2, py2) - max(y1, py1))
+                    )
+
+                    area1 = (x2 - x1) * (y2 - y1)
+                    area2 = (px2 - px1) * (py2 - py1)
+                    union = area1 + area2 - intersection
+
+                    iou = intersection / union if union > 0 else 0
+
+                    if iou > best_iou:
+                        best_iou = iou
+                        matched = (profile_id, label, similarity)
+
+                if matched is not None and best_iou >= 0.45:
+                    obj.profile_id = matched[0]
+                    obj.label = matched[1]
+                    obj.similarity = matched[2]
+                else:
+                    obj.label = "Хүн · нүүрээ харуулна уу"
+
+        return objects
+
         height, width = frame.shape[:2]
         objects = []
         for box in results[0].boxes:
